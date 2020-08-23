@@ -1,3 +1,5 @@
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
 
 function makeUsersArray() {
   return [
@@ -224,23 +226,31 @@ function cleanTables(db) {
   )
 }
 
+function seedUsers(db, user){
+  const preppedUser = user.map(user => ({
+    ...user,
+    password: bcrypt.hashSync(user.password, 1)
+  }))
+  return db.into('blogful_users').insert(preppedUser)
+    .then(() => {
+      db.raw(
+        `SELECT setval('blogful_users_id_seq', ?)`,
+        [user[user.length - 1].id]
+      )
+    })
+}
+
 function seedArticlesTables(db, users, articles, comments=[]) {
   // use a transaction to group the queries and auto rollback on any failure
   return db.transaction(async trx => {
-    await trx.into('blogful_users').insert(users)
+    await seedUsers(trx, users)
     await trx.into('blogful_articles').insert(articles)
     // update the auto sequence to match the forced id values
-    await Promise.all([
-      trx.raw(
-        `SELECT setval('blogful_users_id_seq', ?)`,
-        [users[users.length - 1].id],
-      ),
-      trx.raw(
-        `SELECT setval('blogful_articles_id_seq', ?)`,
-        [articles[articles.length - 1].id],
-      ),
-    ])
-    // only insert comments if there are some, also update the sequence counter
+    await trx.raw(
+      `SELECT setval('blogful_articles_id_seq', ?)`,
+      [articles[articles.length - 1].id],
+    )
+          // only insert comments if there are some, also update the sequence counter
     if (comments.length) {
       await trx.into('blogful_comments').insert(comments)
       await trx.raw(
@@ -252,9 +262,7 @@ function seedArticlesTables(db, users, articles, comments=[]) {
 }
 
 function seedMaliciousArticle(db, user, article) {
-  return db
-    .into('blogful_users')
-    .insert([user])
+  return seedUsers(db, [user])
     .then(() =>
       db
         .into('blogful_articles')
@@ -262,6 +270,14 @@ function seedMaliciousArticle(db, user, article) {
     )
 }
 
+function makeAuthHeader(user, secret = process.env.JWT_SECRET) {
+  const token = jwt.sign({ user_id: user.id }, secret, {
+    subject: user.user_name,
+     algorithm: 'HS256',
+   })
+  return `Bearer ${token}`
+}
+  
 module.exports = {
   makeUsersArray,
   makeArticlesArray,
@@ -274,4 +290,6 @@ module.exports = {
   cleanTables,
   seedArticlesTables,
   seedMaliciousArticle,
+  makeAuthHeader,
+  seedUsers
 }

@@ -1,6 +1,6 @@
 const express = require('express')
 const ArticlesService = require('./articles-service')
-
+const { requireAuth } = require('../middleware/jwt-auth')
 const articlesRouter = express.Router()
 
 articlesRouter
@@ -15,12 +15,14 @@ articlesRouter
 
 articlesRouter
   .route('/:article_id')
+  // .all(requireAuth)
   .all(checkArticleExists)
   .get((req, res) => {
     res.json(ArticlesService.serializeArticle(res.article))
   })
 
 articlesRouter.route('/:article_id/comments/')
+  .all(requireAuth)
   .all(checkArticleExists)
   .get((req, res, next) => {
     ArticlesService.getCommentsForArticle(
@@ -36,11 +38,13 @@ articlesRouter.route('/:article_id/comments/')
 /* async/await syntax for promises */
 async function checkArticleExists(req, res, next) {
   try {
+    console.log('anything')
     const article = await ArticlesService.getById(
       req.app.get('db'),
       req.params.article_id
     )
-
+console.log("article: ", article)
+console.log("article id: ", req.params.article_id)
     if (!article)
       return res.status(404).json({
         error: `Article doesn't exist`
@@ -49,6 +53,7 @@ async function checkArticleExists(req, res, next) {
     res.article = article
     next()
   } catch (error) {
+    console.log("error: ", error)
     next(error)
   }
 }

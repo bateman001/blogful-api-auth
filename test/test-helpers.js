@@ -226,18 +226,19 @@ function cleanTables(db) {
   )
 }
 
-function seedUsers(db, user){
-  const preppedUser = user.map(user => ({
+function seedUsers(db, users) {
+  const preppedUsers = users.map(user => ({
     ...user,
     password: bcrypt.hashSync(user.password, 1)
   }))
-  return db.into('blogful_users').insert(preppedUser)
-    .then(() => {
+  return db.into('blogful_users').insert(preppedUsers)
+    .then(() =>
+      // update the auto sequence to stay in sync
       db.raw(
         `SELECT setval('blogful_users_id_seq', ?)`,
-        [user[user.length - 1].id]
+        [users[users.length - 1].id],
       )
-    })
+    )
 }
 
 function seedArticlesTables(db, users, articles, comments=[]) {
@@ -250,7 +251,7 @@ function seedArticlesTables(db, users, articles, comments=[]) {
       `SELECT setval('blogful_articles_id_seq', ?)`,
       [articles[articles.length - 1].id],
     )
-          // only insert comments if there are some, also update the sequence counter
+    // only insert comments if there are some, also update the sequence counter
     if (comments.length) {
       await trx.into('blogful_comments').insert(comments)
       await trx.raw(
@@ -273,11 +274,11 @@ function seedMaliciousArticle(db, user, article) {
 function makeAuthHeader(user, secret = process.env.JWT_SECRET) {
   const token = jwt.sign({ user_id: user.id }, secret, {
     subject: user.user_name,
-     algorithm: 'HS256',
-   })
+    algorithm: 'HS256',
+  })
   return `Bearer ${token}`
 }
-  
+
 module.exports = {
   makeUsersArray,
   makeArticlesArray,
@@ -291,5 +292,5 @@ module.exports = {
   seedArticlesTables,
   seedMaliciousArticle,
   makeAuthHeader,
-  seedUsers
+  seedUsers,
 }
